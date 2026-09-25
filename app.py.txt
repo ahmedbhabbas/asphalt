@@ -1,0 +1,27 @@
+from fastapi import FastAPI, UploadFile, File
+from ultralytics import YOLO
+import tempfile
+
+app = FastAPI()
+model = YOLO("best.pt")
+
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
+    suffix = file.filename.split(".")[-1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as tmp:
+        tmp.write(await file.read())
+        image_path = tmp.name
+
+    results = model(image_path, conf=0.25)
+
+    detections = []
+    for r in results:
+        for box in r.boxes:
+            detections.append({
+                "class_id": int(box.cls[0]),
+                "class_name": model.names[int(box.cls[0])],
+                "confidence": float(box.conf[0]),
+                "box": box.xyxy[0].tolist()
+            })
+
+    return {"detections": detections}
